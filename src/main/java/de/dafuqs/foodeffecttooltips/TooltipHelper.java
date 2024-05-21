@@ -3,82 +3,78 @@ package de.dafuqs.foodeffecttooltips;
 import com.google.common.collect.*;
 import com.mojang.datafixers.util.Pair;
 import net.fabricmc.api.*;
+import net.minecraft.component.type.*;
 import net.minecraft.entity.attribute.*;
 import net.minecraft.entity.effect.*;
 import net.minecraft.item.*;
+import net.minecraft.registry.entry.*;
 import net.minecraft.screen.*;
 import net.minecraft.text.*;
 import net.minecraft.util.*;
+import org.jetbrains.annotations.*;
 
 import java.util.*;
 
 @Environment(EnvType.CLIENT)
 public class TooltipHelper {
 	
-	public static void addFoodComponentEffectTooltip(ItemStack stack, List<Text> tooltip, float tickRate) {
-		FoodComponent foodComponent = stack.getItem().getFoodComponent();
-		if (foodComponent != null) {
-			boolean isDrink = stack.getUseAction() == UseAction.DRINK;
-			buildFoodEffectTooltip(tooltip, foodComponent.getStatusEffects(), tickRate, isDrink);
-		}
-	}
-	
-	public static void buildFoodEffectTooltip(List<Text> tooltip, List<Pair<StatusEffectInstance, Float>> effectsWithChance, float tickRate, boolean drink) {
-		if (effectsWithChance.isEmpty()) {
+	public static void addFoodComponentEffectTooltip(@NotNull ItemStack stack, @NotNull FoodComponent foodComponent, @NotNull List<Text> tooltip, float tickRate) {
+		if (foodComponent.effects().isEmpty()) {
 			return;
 		}
+		boolean isDrink = stack.getUseAction() == UseAction.DRINK;
+		buildFoodEffectTooltip(tooltip, foodComponent.effects(), tickRate, isDrink);
+	}
+	
+	private static void buildFoodEffectTooltip(@NotNull List<Text> tooltip, List<FoodComponent.StatusEffectEntry> effects, float tickRate, boolean isDrink) {
 		
-		List<Pair<EntityAttribute, EntityAttributeModifier>> modifiersList = Lists.newArrayList();
-		MutableText translatableText;
-		StatusEffect statusEffect;
-		for (Iterator<Pair<StatusEffectInstance, Float>> var5 = effectsWithChance.iterator(); var5.hasNext(); tooltip.add(translatableText.formatted(statusEffect.getCategory().getFormatting()))) {
-			Pair<StatusEffectInstance, Float> entry = var5.next();
-			StatusEffectInstance statusEffectInstance = entry.getFirst();
-			Float chance = entry.getSecond();
-			
-			translatableText = Text.translatable(statusEffectInstance.getTranslationKey());
-			statusEffect = statusEffectInstance.getEffectType();
-			Map<EntityAttribute, AttributeModifierCreator> map = statusEffect.getAttributeModifiers();
-			if (!map.isEmpty()) {
-				for (Map.Entry<EntityAttribute, AttributeModifierCreator> entityAttributeEntityAttributeModifierEntry : map.entrySet()) {
-					modifiersList.add(new Pair<>(entityAttributeEntityAttributeModifierEntry.getKey(), entityAttributeEntityAttributeModifierEntry.getValue().createAttributeModifier(statusEffectInstance.getAmplifier())));
-				}
-			}
-			
+		List<Pair<RegistryEntry<EntityAttribute>, EntityAttributeModifier>> modifiers = Lists.newArrayList();
+		
+		MutableText mutableText;
+		RegistryEntry<StatusEffect> registryEntry;
+		for (Iterator<FoodComponent.StatusEffectEntry> i = effects.iterator(); i.hasNext(); tooltip.add(mutableText.formatted(registryEntry.value().getCategory().getFormatting()))) {
+			FoodComponent.StatusEffectEntry entry = i.next();
+			StatusEffectInstance statusEffectInstance = entry.effect();
+			mutableText = Text.translatable(statusEffectInstance.getTranslationKey());
+			registryEntry = statusEffectInstance.getEffectType();
+			registryEntry.value().forEachAttributeModifier(statusEffectInstance.getAmplifier(), (attribute, modifier) -> {
+				modifiers.add(new Pair<>(attribute, modifier));
+			});
 			if (statusEffectInstance.getAmplifier() > 0) {
-				translatableText = Text.translatable("potion.withAmplifier", translatableText, Text.translatable("potion.potency." + statusEffectInstance.getAmplifier()));
+				mutableText = Text.translatable("potion.withAmplifier", mutableText, Text.translatable("potion.potency." + statusEffectInstance.getAmplifier()));
 			}
-			if (statusEffectInstance.getDuration() > 20) {
-				translatableText = Text.translatable("potion.withDuration", translatableText, StringHelper.formatTicks(statusEffectInstance.getDuration(), tickRate));
+			
+			if (!statusEffectInstance.isDurationBelow(20)) {
+				mutableText = Text.translatable("potion.withDuration", mutableText, StatusEffectUtil.getDurationText(statusEffectInstance, 1.0F, tickRate));
 			}
-			if (chance < 1.0F) {
-				translatableText = Text.translatable("foodeffecttooltips.food.withChance", translatableText, Math.round(chance * 100));
+			if (entry.probability() < 1.0F) {
+				mutableText = Text.translatable("foodeffecttooltips.food.withChance", mutableText, Math.round(entry.probability() * 100));
 			}
 		}
 		
-		if (!modifiersList.isEmpty()) {
+		if (!modifiers.isEmpty()) {
 			tooltip.add(ScreenTexts.EMPTY);
-			if (drink) {
+			if (isDrink) {
 				tooltip.add(Text.translatable("potion.whenDrank").formatted(Formatting.DARK_PURPLE));
 			} else {
 				tooltip.add(Text.translatable("foodeffecttooltips.food.whenEaten").formatted(Formatting.DARK_PURPLE));
 			}
 			
-			for (Pair<EntityAttribute, EntityAttributeModifier> entityAttributeEntityAttributeModifierPair : modifiersList) {
-				EntityAttributeModifier entityAttributeModifier3 = entityAttributeEntityAttributeModifierPair.getSecond();
-				double d = entityAttributeModifier3.getValue();
+			for (Pair<RegistryEntry<EntityAttribute>, EntityAttributeModifier> modifier : modifiers) {
+				EntityAttributeModifier entityAttributeModifier = modifier.getSecond();
+				double d = entityAttributeModifier.value();
 				double e;
-				if (entityAttributeModifier3.getOperation() != EntityAttributeModifier.Operation.MULTIPLY_BASE && entityAttributeModifier3.getOperation() != EntityAttributeModifier.Operation.MULTIPLY_TOTAL) {
-					e = entityAttributeModifier3.getValue();
+				if (entityAttributeModifier.operation() != EntityAttributeModifier.Operation.ADD_MULTIPLIED_BASE && entityAttributeModifier.operation() != EntityAttributeModifier.Operation.ADD_MULTIPLIED_TOTAL) {
+					e = entityAttributeModifier.value();
 				} else {
-					e = entityAttributeModifier3.getValue() * 100.0D;
+					e = entityAttributeModifier.value() * 100.0;
 				}
 				
-				if (d > 0.0D) {
-					tooltip.add((Text.translatable("attribute.modifier.plus." + entityAttributeModifier3.getOperation().getId(), ItemStack.MODIFIER_FORMAT.format(e), Text.translatable((entityAttributeEntityAttributeModifierPair.getFirst()).getTranslationKey()))).formatted(Formatting.BLUE));
-				} else if (d < 0.0D) {
-					e *= -1.0D;
-					tooltip.add((Text.translatable("attribute.modifier.take." + entityAttributeModifier3.getOperation().getId(), ItemStack.MODIFIER_FORMAT.format(e), Text.translatable((entityAttributeEntityAttributeModifierPair.getFirst()).getTranslationKey()))).formatted(Formatting.RED));
+				if (d > 0.0) {
+					tooltip.add(Text.translatable("attribute.modifier.plus." + entityAttributeModifier.operation().getId(), AttributeModifiersComponent.DECIMAL_FORMAT.format(e), Text.translatable(modifier.getFirst().value().getTranslationKey())).formatted(Formatting.BLUE));
+				} else if (d < 0.0) {
+					e *= -1.0;
+					tooltip.add(Text.translatable("attribute.modifier.take." + entityAttributeModifier.operation().getId(), AttributeModifiersComponent.DECIMAL_FORMAT.format(e), Text.translatable(modifier.getFirst().value().getTranslationKey())).formatted(Formatting.RED));
 				}
 			}
 		}

@@ -22,6 +22,14 @@ public class FoodEffectsConfig implements ConfigData {
 		}
 		if (BlacklistedModsIDs.isEmpty()) {
 			BlacklistedModsIDs.add("vinery");
+			BlacklistedModsIDs.add("farmersdelight");
+			BlacklistedModsIDs.add("createfood");
+			BlacklistedModsIDs.add("expandeddelight");
+			BlacklistedModsIDs.add("frightsdelight");
+			BlacklistedModsIDs.add("moredelight");
+			BlacklistedModsIDs.add("oceansdelight");
+			BlacklistedModsIDs.add("silentsdelight");
+			BlacklistedModsIDs.add("ubesdelight");
 		}
 	}
 	

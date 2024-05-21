@@ -5,15 +5,13 @@ import me.shedaniel.autoconfig.*;
 import me.shedaniel.autoconfig.serializer.*;
 import net.fabricmc.api.*;
 import net.fabricmc.fabric.api.client.item.v1.*;
-import net.minecraft.block.*;
-import net.minecraft.client.*;
-import net.minecraft.client.world.*;
+import net.minecraft.component.*;
+import net.minecraft.component.type.*;
 import net.minecraft.entity.effect.*;
 import net.minecraft.item.*;
-import net.minecraft.nbt.*;
-import net.minecraft.potion.*;
 import net.minecraft.registry.*;
 import net.minecraft.util.*;
+import org.jetbrains.annotations.*;
 
 import java.util.*;
 
@@ -28,28 +26,23 @@ public class FoodeffecttooltipsClient implements ClientModInitializer {
 		AutoConfig.register(FoodEffectsConfig.class, JanksonConfigSerializer::new);
 		CONFIG = AutoConfig.getConfigHolder(FoodEffectsConfig.class).getConfig();
 		
-		ItemTooltipCallback.EVENT.register((stack, context, lines) -> {
-			if (stack.isOf(Items.SUSPICIOUS_STEW) && FoodeffecttooltipsClient.CONFIG.ShowSuspiciousStewTooltips && !context.isCreative()) {
-				List<StatusEffectInstance> list = new ArrayList<>();
-				NbtCompound nbtCompound = stack.getNbt();
-				if (nbtCompound != null && nbtCompound.contains("effects", 9)) {
-					SuspiciousStewIngredient.StewEffect.LIST_CODEC.parse(NbtOps.INSTANCE, nbtCompound.getList("effects", 10)).result().ifPresent((list1) -> {
-						list1.forEach((effect) -> {
-							list.add(effect.createStatusEffectInstance());
-						});
-					});
+		ItemTooltipCallback.EVENT.register((stack, context, tooltipType, lines) -> {
+			@Nullable FoodComponent foodComponent = stack.get(DataComponentTypes.FOOD);
+			if (foodComponent != null && shouldShowTooltip(stack)) {
+				TooltipHelper.addFoodComponentEffectTooltip(stack, foodComponent, lines, context.getUpdateTickRate());
+			}
+			
+			if (FoodeffecttooltipsClient.CONFIG.ShowSuspiciousStewTooltips && !tooltipType.isCreative()) {
+				@Nullable SuspiciousStewEffectsComponent sus = stack.getOrDefault(DataComponentTypes.SUSPICIOUS_STEW_EFFECTS, null);
+				if (sus != null && !sus.effects().isEmpty()) {
+					List<StatusEffectInstance> list = new ArrayList<>();
+					for (SuspiciousStewEffectsComponent.StewEffect stewEffect : sus.effects()) {
+						list.add(stewEffect.createStatusEffectInstance());
+					}
+					PotionContentsComponent.buildTooltip(list, lines::add, 1.0F, context.getUpdateTickRate());
 				}
-				
-				PotionUtil.buildTooltip(list, lines, 1.0F, getTickRate());
-			} else if (stack.isFood() && shouldShowTooltip(stack)) {
-				TooltipHelper.addFoodComponentEffectTooltip(stack, lines, getTickRate());
 			}
 		});
-	}
-	
-	private static float getTickRate() {
-		ClientWorld world = MinecraftClient.getInstance().world;
-		return world == null ? 20.0F : world.getTickManager().getTickRate();
 	}
 	
 	public static boolean shouldShowTooltip(ItemStack stack) {
