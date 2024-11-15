@@ -27,7 +27,7 @@ public class FoodeffecttooltipsClient implements ClientModInitializer {
 		CONFIG = AutoConfig.getConfigHolder(FoodEffectsConfig.class).getConfig();
 		
 		ItemTooltipCallback.EVENT.register((stack, context, tooltipType, lines) -> {
-			@Nullable FoodComponent foodComponent = stack.get(DataComponentTypes.FOOD);
+			@Nullable ConsumableComponent foodComponent = stack.get(DataComponentTypes.CONSUMABLE);
 			if (foodComponent != null && shouldShowTooltip(stack)) {
 				TooltipHelper.addFoodComponentEffectTooltip(stack, foodComponent, lines, context.getUpdateTickRate());
 			}

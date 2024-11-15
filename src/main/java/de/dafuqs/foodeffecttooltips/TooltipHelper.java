@@ -7,6 +7,7 @@ import net.minecraft.component.type.*;
 import net.minecraft.entity.attribute.*;
 import net.minecraft.entity.effect.*;
 import net.minecraft.item.*;
+import net.minecraft.item.consume.*;
 import net.minecraft.registry.entry.*;
 import net.minecraft.screen.*;
 import net.minecraft.text.*;
@@ -18,37 +19,43 @@ import java.util.*;
 @Environment(EnvType.CLIENT)
 public class TooltipHelper {
 	
-	public static void addFoodComponentEffectTooltip(@NotNull ItemStack stack, @NotNull FoodComponent foodComponent, @NotNull List<Text> tooltip, float tickRate) {
-		if (foodComponent.effects().isEmpty()) {
+	public static void addFoodComponentEffectTooltip(@NotNull ItemStack stack, @NotNull ConsumableComponent consumableComponent, @NotNull List<Text> tooltip, float tickRate) {
+		if (consumableComponent.onConsumeEffects().isEmpty()) {
 			return;
 		}
 		boolean isDrink = stack.getUseAction() == UseAction.DRINK;
-		buildFoodEffectTooltip(tooltip, foodComponent.effects(), tickRate, isDrink);
+		buildFoodEffectTooltip(tooltip, consumableComponent.onConsumeEffects(), tickRate, isDrink);
 	}
 	
-	private static void buildFoodEffectTooltip(@NotNull List<Text> tooltip, List<FoodComponent.StatusEffectEntry> effects, float tickRate, boolean isDrink) {
+	private static void buildFoodEffectTooltip(@NotNull List<Text> tooltip, List<ConsumeEffect> effects, float tickRate, boolean isDrink) {
 		
 		List<Pair<RegistryEntry<EntityAttribute>, EntityAttributeModifier>> modifiers = Lists.newArrayList();
 		
 		MutableText mutableText;
 		RegistryEntry<StatusEffect> registryEntry;
-		for (Iterator<FoodComponent.StatusEffectEntry> i = effects.iterator(); i.hasNext(); tooltip.add(mutableText.formatted(registryEntry.value().getCategory().getFormatting()))) {
-			FoodComponent.StatusEffectEntry entry = i.next();
-			StatusEffectInstance statusEffectInstance = entry.effect();
-			mutableText = Text.translatable(statusEffectInstance.getTranslationKey());
-			registryEntry = statusEffectInstance.getEffectType();
-			registryEntry.value().forEachAttributeModifier(statusEffectInstance.getAmplifier(), (attribute, modifier) -> {
-				modifiers.add(new Pair<>(attribute, modifier));
-			});
-			if (statusEffectInstance.getAmplifier() > 0) {
-				mutableText = Text.translatable("potion.withAmplifier", mutableText, Text.translatable("potion.potency." + statusEffectInstance.getAmplifier()));
+		for (ConsumeEffect entry : effects) {
+			if (!(entry instanceof ApplyEffectsConsumeEffect applyEffectsConsumeEffect)) {
+				continue;
 			}
 			
-			if (!statusEffectInstance.isDurationBelow(20)) {
-				mutableText = Text.translatable("potion.withDuration", mutableText, StatusEffectUtil.getDurationText(statusEffectInstance, 1.0F, tickRate));
-			}
-			if (entry.probability() < 1.0F) {
-				mutableText = Text.translatable("foodeffecttooltips.food.withChance", mutableText, Math.round(entry.probability() * 100));
+			for (StatusEffectInstance statusEffectInstance : applyEffectsConsumeEffect.effects()) {
+				mutableText = Text.translatable(statusEffectInstance.getTranslationKey());
+				registryEntry = statusEffectInstance.getEffectType();
+				registryEntry.value().forEachAttributeModifier(statusEffectInstance.getAmplifier(), (attribute, modifier) -> {
+					modifiers.add(new Pair<>(attribute, modifier));
+				});
+				if (statusEffectInstance.getAmplifier() > 0) {
+					mutableText = Text.translatable("potion.withAmplifier", mutableText, Text.translatable("potion.potency." + statusEffectInstance.getAmplifier()));
+				}
+				
+				if (!statusEffectInstance.isDurationBelow(20)) {
+					mutableText = Text.translatable("potion.withDuration", mutableText, StatusEffectUtil.getDurationText(statusEffectInstance, 1.0F, tickRate));
+				}
+				if (applyEffectsConsumeEffect.probability() < 1.0F) {
+					mutableText = Text.translatable("foodeffecttooltips.food.withChance", mutableText, Math.round(applyEffectsConsumeEffect.probability() * 100));
+				}
+				
+				tooltip.add(mutableText.formatted(registryEntry.value().getCategory().getFormatting()));
 			}
 		}
 		
